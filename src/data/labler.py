@@ -57,7 +57,7 @@ def auto_label(text: str) -> tuple[int, float]:
     elif neutral_hits >= 2 and conflict_hits == 0:
         return 0, 0.9
     else:
-        return -1, 0.0  # нужна ручная разметка
+        return -1, 0.0  
 
 
 def review_uncertain(items: list[dict]) -> list[dict]:
