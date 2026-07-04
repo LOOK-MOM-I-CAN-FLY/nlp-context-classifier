@@ -65,7 +65,7 @@ def fetch_newsapi(query: str, api_key: str, max_articles: int = 100) -> list[dic
     NewsAPI free tier не отдаёт.
     """
     items: list[dict] = []
-    page_size = min(max_articles, 100)  # лимит NewsAPI на страницу
+    page_size = min(max_articles, 100)  
 
     params = {
         "q": query,
@@ -113,7 +113,7 @@ def fetch_reddit(
 
     Возвращает список {"text": ..., "source": "reddit", "subreddit": subreddit, "url": ...}.
     """
-    import praw  # локальный импорт: библиотека нужна только для этого источника
+    import praw 
 
     reddit = praw.Reddit(
         client_id=client_id,
@@ -127,7 +127,6 @@ def fetch_reddit(
         title = (submission.title or "").strip()
         body = (submission.selftext or "").strip()
 
-        # Берём первые 2-3 предложения тела поста
         sentences = split_into_sentences(body)
         snippet = " ".join(sentences[:3])
 
@@ -243,7 +242,7 @@ def collect_wikipedia_all() -> list[dict]:
     items: list[dict] = []
     for title in WIKIPEDIA_NEUTRAL_TITLES:
         items.extend(fetch_wikipedia(title, "neutral"))
-        time.sleep(2.0)  # вежливая задержка между запросами к API
+        time.sleep(2.0)  
     for title in WIKIPEDIA_CONFLICT_TITLES:
         items.extend(fetch_wikipedia(title, "conflict"))
         time.sleep(2.0)
