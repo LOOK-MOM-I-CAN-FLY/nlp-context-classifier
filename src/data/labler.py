@@ -82,7 +82,7 @@ def review_uncertain(items: list[dict]) -> list[dict]:
             item["label"] = 0
             item["confidence"] = 1.0
             reviewed.append(item)
-        # любой другой ввод (включая "s") — пропуск примера
+
 
     return reviewed
 
