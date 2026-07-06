@@ -212,3 +212,93 @@ WIKIPEDIA_CONFLICT_TITLES = [
     "Battle of Kherson (2022)", "Battle of Soledar",
     "Kharkiv counteroffensive", "Battle of Kyiv (2022)",
 ]
+
+
+def split_into_sentences(text: str) -> list[str]:
+    """Грубое разбиение текста на предложения по точке/!/? с учётом пробела после."""
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return []
+    sentences = re.split(r"(?<=[.!?])\s+(?=[A-ZА-Я])", text)
+    return [s.strip() for s in sentences if s.strip()]
+
+
+def fetch_wikipedia(title: str, expected_label_hint: str) -> list[dict]:
+    """
+    Тянет plaintext-экстракт статьи Wikipedia и режет на предложения.
+
+    expected_label_hint: "conflict" или "neutral" — только для метаданных,
+    финальный лейбл всё равно выставляет labeler.auto_label().
+
+    Возвращает список {"text": ..., "source": "wikipedia", "title": title, "hint": ...}.
+    """
+    params = {
+        "action": "query",
+        "prop": "extracts",
+        "explaintext": 1,
+        "format": "json",
+        "titles": title,
+    }
+    headers = {"User-Agent": USER_AGENT}
+
+    for attempt in range(3):
+        response = requests.get(WIKIPEDIA_API_URL, params=params, headers=headers, timeout=15)
+        if response.status_code == 429:
+            time.sleep(5 * (attempt + 1))  # backoff при 429 Too Many Requests
+            continue
+        response.raise_for_status()
+        break
+    else:
+        response.raise_for_status()
+
+    pages = response.json().get("query", {}).get("pages", {})
+
+    items: list[dict] = []
+    for page in pages.values():
+        extract = page.get("extract", "")
+        for sentence in split_into_sentences(extract):
+            word_count = len(sentence.split())
+            if 8 <= word_count <= 40 and "==" not in sentence:
+                items.append({
+                    "text": sentence,
+                    "source": "wikipedia",
+                    "title": title,
+                    "hint": expected_label_hint,
+                })
+
+    return items
+
+
+def collect_wikipedia_all() -> list[dict]:
+    """Собирает предложения со всех сконфигурированных статей Wikipedia."""
+    items: list[dict] = []
+    for title in WIKIPEDIA_NEUTRAL_TITLES:
+        items.extend(fetch_wikipedia(title, "neutral"))
+        time.sleep(2.0)  # вежливая задержка между запросами к API
+    for title in WIKIPEDIA_CONFLICT_TITLES:
+        items.extend(fetch_wikipedia(title, "conflict"))
+        time.sleep(2.0)
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Сохранение
+# ---------------------------------------------------------------------------
+
+def save_raw(items: list[dict], filename: str) -> None:
+    """Сохраняет список словарей в data/raw/{filename}.jsonl (append не делает, перезаписывает)."""
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    path = RAW_DIR / f"{filename}.jsonl"
+
+    with open(path, "w", encoding="utf-8") as f:
+        for item in items:
+            f.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+    print(f"Сохранено {len(items)} записей в {path}")
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
