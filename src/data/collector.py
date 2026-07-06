@@ -302,3 +302,63 @@ def save_raw(items: list[dict], filename: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Сбор сырых текстов для ContextWatch")
+    sub = parser.add_subparsers(dest="source", required=True)
+
+    p_wiki = sub.add_parser("wikipedia", help="Собрать предложения из статей Wikipedia (без ключа)")
+    p_wiki.add_argument("--output", default="wikipedia", help="Имя выходного файла (без .jsonl)")
+
+    p_news = sub.add_parser("newsapi", help="Собрать статьи NewsAPI")
+    p_news.add_argument("--api-key", help="Ключ NewsAPI (по умолчанию берётся из NEWS_API_KEY в .env)")
+    p_news.add_argument("--max-articles", type=int, default=100)
+    p_news.add_argument("--output", default="newsapi")
+
+    p_reddit = sub.add_parser("reddit", help="Собрать посты с Reddit")
+    p_reddit.add_argument("--client-id", help="Reddit client_id (по умолчанию из REDDIT_CLIENT_ID в .env)")
+    p_reddit.add_argument("--client-secret", help="Reddit client_secret (по умолчанию из REDDIT_CLIENT_SECRET в .env)")
+    p_reddit.add_argument("--subreddits", nargs="+", default=["worldnews", "europe", "history", "travel"])
+    p_reddit.add_argument("--query", default="Ukraine Russia")
+    p_reddit.add_argument("--limit", type=int, default=100)
+    p_reddit.add_argument("--output", default="reddit")
+
+    args = parser.parse_args()
+    load_env_file()  # подхватываем ключи из .env, если он есть
+
+    if args.source == "wikipedia":
+        items = collect_wikipedia_all()
+        save_raw(items, args.output)
+
+    elif args.source == "newsapi":
+        api_key = args.api_key or os.getenv("NEWS_API_KEY")
+        if not api_key:
+            parser.error("нет ключа NewsAPI: передай --api-key или добавь NEWS_API_KEY=... в .env")
+
+        items: list[dict] = []
+        for query in CONFLICT_QUERIES + NEUTRAL_QUERIES:
+            try:
+                new_items = fetch_newsapi(query, api_key, args.max_articles)
+                print(f"  '{query}': +{len(new_items)}")
+                items.extend(new_items)
+            except Exception as e:
+                # один упавший запрос (таймаут/лимит) не должен ронять весь сбор
+                print(f"  [warn] запрос '{query}' пропущен: {e}")
+        save_raw(items, args.output)
+
+    elif args.source == "reddit":
+        client_id = args.client_id or os.getenv("REDDIT_CLIENT_ID")
+        client_secret = args.client_secret or os.getenv("REDDIT_CLIENT_SECRET")
+        if not client_id or not client_secret:
+            parser.error("нет Reddit-кредов: передай --client-id/--client-secret или добавь "
+                         "REDDIT_CLIENT_ID=... и REDDIT_CLIENT_SECRET=... в .env")
+
+        items = []
+        for subreddit in args.subreddits:
+            items.extend(fetch_reddit(
+                subreddit, args.query, client_id, client_secret, args.limit
+            ))
+        save_raw(items, args.output)
+
+
+if __name__ == "__main__":
+    main()
