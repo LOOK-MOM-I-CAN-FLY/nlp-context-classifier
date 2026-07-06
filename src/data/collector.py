@@ -109,3 +109,106 @@ def fetch_newsapi(query: str, api_key: str, max_articles: int = 100) -> list[dic
     if data.get("status") == "error":
         # NewsAPI отдаёт ошибки как JSON: неверный ключ, превышен лимит и т.п.
         raise RuntimeError(f"NewsAPI error [{data.get('code')}]: {data.get('message')}")
+
+    for article in data.get("articles", [])[:max_articles]:
+        title = (article.get("title") or "").strip()
+        description = (article.get("description") or "").strip()
+        text = f"{title}. {description}".strip(". ").strip()
+
+        if not text:
+            continue
+
+        items.append({
+            "text": text,
+            "source": "newsapi",
+            "query": query,
+            "url": article.get("url"),
+        })
+
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Источник 2: Reddit (PRAW)
+# ---------------------------------------------------------------------------
+
+def fetch_reddit(
+    subreddit: str,
+    query: str,
+    client_id: str,
+    client_secret: str,
+    limit: int = 100,
+) -> list[dict]:
+    """
+    Тянет посты с Reddit через PRAW: заголовок + первые 2-3 предложения текста поста.
+
+    Возвращает список {"text": ..., "source": "reddit", "subreddit": subreddit, "url": ...}.
+    """
+    import praw  # локальный импорт: библиотека нужна только для этого источника
+
+    reddit = praw.Reddit(
+        client_id=client_id,
+        client_secret=client_secret,
+        user_agent=USER_AGENT,
+    )
+
+    items: list[dict] = []
+
+    for submission in reddit.subreddit(subreddit).search(query, limit=limit):
+        title = (submission.title or "").strip()
+        body = (submission.selftext or "").strip()
+
+        # Берём первые 2-3 предложения тела поста
+        sentences = split_into_sentences(body)
+        snippet = " ".join(sentences[:3])
+
+        text = f"{title}. {snippet}".strip(". ").strip()
+        if not text:
+            continue
+
+        items.append({
+            "text": text,
+            "source": "reddit",
+            "subreddit": subreddit,
+            "url": f"https://reddit.com{submission.permalink}",
+        })
+
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Источник 3: Wikipedia
+# ---------------------------------------------------------------------------
+
+WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
+
+# Статьи класса 0 — география, культура, история без военной привязки
+WIKIPEDIA_NEUTRAL_TITLES = [
+    "Kyiv", "Lviv", "Odesa", "Black Sea", "Carpathian Mountains",
+    "Volga River", "Ukrainian cuisine", "Russian cuisine",
+    "Ukrainian language", "Russian language", "Saint Basil's Cathedral",
+    "Hermitage Museum", "Ukrainian literature", "Russian literature",
+    "Borscht", "Ukraine national football team",
+    "Moscow", "Saint Petersburg", "Sevastopol", "Crimean Tatars",
+    "Taras Shevchenko", "Alexander Pushkin", "Leo Tolstoy",
+    "Fyodor Dostoevsky", "FC Shakhtar Donetsk", "FC Dynamo Kyiv",
+    "Vyshyvanka", "Varenyky", "Ukrainian Orthodox Church",
+    "Tourism in Russia", "Geography of Ukraine", "Geography of Russia",
+    "Music of Ukraine", "Russian cinema",
+]
+
+# Статьи класса 1 — военный/политический конфликт
+WIKIPEDIA_CONFLICT_TITLES = [
+    "Russian invasion of Ukraine", "Russo-Ukrainian War",
+    "Battle of Bakhmut", "Siege of Mariupol", "War in Donbas",
+    "International sanctions during the Russo-Ukrainian War",
+    "Battle of Avdiivka", "Wagner Group",
+    "Timeline of the Russian invasion of Ukraine (2022)",
+    "Casualties of the Russo-Ukrainian War",
+    "Humanitarian impact of the Russian invasion of Ukraine",
+    "War crimes in the Russian invasion of Ukraine",
+    "Refugees of the Russian invasion of Ukraine",
+    "Sanctions against Russia following the invasion of Ukraine",
+    "Battle of Kherson (2022)", "Battle of Soledar",
+    "Kharkiv counteroffensive", "Battle of Kyiv (2022)",
+]
