@@ -51,7 +51,6 @@ USER_AGENT = "ContextWatch-DataCollector/1.0 (educational NLP project)"
 
 NEWSAPI_URL = "https://newsapi.org/v2/everything"
 
-# Ключевые слова для класса 1 (политизированный/военный контекст)
 CONFLICT_QUERIES = [
     "Russia Ukraine war",
     "missile strike Ukraine",
@@ -60,7 +59,6 @@ CONFLICT_QUERIES = [
     "front line Ukraine",
 ]
 
-# Ключевые слова для класса 0 (нейтральный контекст)
 NEUTRAL_QUERIES = [
     "Ukrainian cuisine",
     "Russia geography",
@@ -107,7 +105,6 @@ def fetch_newsapi(query: str, api_key: str, max_articles: int = 100) -> list[dic
 
     data = response.json()
     if data.get("status") == "error":
-        # NewsAPI отдаёт ошибки как JSON: неверный ключ, превышен лимит и т.п.
         raise RuntimeError(f"NewsAPI error [{data.get('code')}]: {data.get('message')}")
 
     for article in data.get("articles", [])[:max_articles]:
@@ -128,9 +125,6 @@ def fetch_newsapi(query: str, api_key: str, max_articles: int = 100) -> list[dic
     return items
 
 
-# ---------------------------------------------------------------------------
-# Источник 2: Reddit (PRAW)
-# ---------------------------------------------------------------------------
 
 def fetch_reddit(
     subreddit: str,
@@ -158,7 +152,6 @@ def fetch_reddit(
         title = (submission.title or "").strip()
         body = (submission.selftext or "").strip()
 
-        # Берём первые 2-3 предложения тела поста
         sentences = split_into_sentences(body)
         snippet = " ".join(sentences[:3])
 
@@ -176,13 +169,9 @@ def fetch_reddit(
     return items
 
 
-# ---------------------------------------------------------------------------
-# Источник 3: Wikipedia
-# ---------------------------------------------------------------------------
 
 WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
 
-# Статьи класса 0 — география, культура, история без военной привязки
 WIKIPEDIA_NEUTRAL_TITLES = [
     "Kyiv", "Lviv", "Odesa", "Black Sea", "Carpathian Mountains",
     "Volga River", "Ukrainian cuisine", "Russian cuisine",
@@ -197,7 +186,6 @@ WIKIPEDIA_NEUTRAL_TITLES = [
     "Music of Ukraine", "Russian cinema",
 ]
 
-# Статьи класса 1 — военный/политический конфликт
 WIKIPEDIA_CONFLICT_TITLES = [
     "Russian invasion of Ukraine", "Russo-Ukrainian War",
     "Battle of Bakhmut", "Siege of Mariupol", "War in Donbas",
@@ -281,9 +269,6 @@ def collect_wikipedia_all() -> list[dict]:
     return items
 
 
-# ---------------------------------------------------------------------------
-# Сохранение
-# ---------------------------------------------------------------------------
 
 def save_raw(items: list[dict], filename: str) -> None:
     """Сохраняет список словарей в data/raw/{filename}.jsonl (append не делает, перезаписывает)."""
@@ -296,10 +281,6 @@ def save_raw(items: list[dict], filename: str) -> None:
 
     print(f"Сохранено {len(items)} записей в {path}")
 
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 
 def main() -> None:
@@ -341,7 +322,6 @@ def main() -> None:
                 print(f"  '{query}': +{len(new_items)}")
                 items.extend(new_items)
             except Exception as e:
-                # один упавший запрос (таймаут/лимит) не должен ронять весь сбор
                 print(f"  [warn] запрос '{query}' пропущен: {e}")
         save_raw(items, args.output)
 
